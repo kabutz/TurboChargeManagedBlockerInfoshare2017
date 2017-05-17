@@ -8,6 +8,8 @@ import java.util.concurrent.*;
 // demo2: test100_000_000() time = 25230
 // demo3: test100_000_000() time = 16822
 // demo4: test100_000_000() time = 10226
+// demo5: test100_000_000() time = 7016
+
 
 
 // TODO: Sign up to Heinz's "The Java Specialists' Newsletter":
@@ -23,12 +25,13 @@ public class Fibonacci {
         return f(n, cache);
     }
 
+    private final BigInteger RESERVED = BigInteger.valueOf(-1000);
+
     public BigInteger f(int n, Map<Integer, BigInteger> cache) {
         threads.add(Thread.currentThread());
 
-        BigInteger result = cache.get(n);
-        if (result == null) {
-
+        BigInteger result = cache.putIfAbsent(n, RESERVED);
+        if (result == null) { // we won the race, can start working
             int half = (n + 1) / 2;
 
             RecursiveTask<BigInteger> f0_task = new RecursiveTask<BigInteger>() {
@@ -47,12 +50,26 @@ public class Fibonacci {
                 } else {
                     result = f0.shiftLeft(1).add(f1).multiply(f1);
                 }
-                cache.put(n, result);
+                synchronized (RESERVED) {
+                    cache.put(n, result);
+                    RESERVED.notifyAll();
+                }
             } finally {
                 time = n > 10_000 ? System.currentTimeMillis() - time : 0;
                 if (time > 50) {
                     System.out.printf("f(%d) took %d ms%n", n, time);
                 }
+            }
+        } else if (result == RESERVED) {
+            // we must wait
+            try {
+                synchronized (RESERVED) {
+                    while((result = cache.get(n)) == RESERVED) {
+                        RESERVED.wait();
+                    }
+                }
+            } catch (InterruptedException e) {
+                throw new CancellationException("interrupted");
             }
         }
         return result;
