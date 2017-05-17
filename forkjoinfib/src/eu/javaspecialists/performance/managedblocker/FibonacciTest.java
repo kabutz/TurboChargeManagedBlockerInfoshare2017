@@ -52,6 +52,7 @@ public class FibonacciTest {
         assertEquals(3471105, fib.f(10_000_000).bitCount());
         time = System.currentTimeMillis() - time;
         System.out.println("test10_000_000() time = " + time);
+        System.out.println(Fibonacci.threads);
     }
 
     @Test
@@ -63,6 +64,7 @@ public class FibonacciTest {
         time = System.currentTimeMillis() - time;
         System.out.println("After test100_000_000(): " + ForkJoinPool.commonPool());
         System.out.println("test100_000_000() time = " + time);
+        System.out.println(Fibonacci.threads);
     }
 
     //@Test
