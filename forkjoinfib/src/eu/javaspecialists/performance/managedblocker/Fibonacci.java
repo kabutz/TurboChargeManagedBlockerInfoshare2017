@@ -9,6 +9,7 @@ import java.util.concurrent.*;
 // demo3: test100_000_000() time = 16822
 // demo4: test100_000_000() time = 10226
 // demo5: test100_000_000() time = 7016
+// demo6: test100_000_000() time = 7212
 
 
 
@@ -19,10 +20,15 @@ public class Fibonacci {
     public static final Set<Thread> threads = ConcurrentHashMap.newKeySet();
 
     public BigInteger f(int n) {
-        Map<Integer, BigInteger> cache = new ConcurrentHashMap<>();
-        cache.put(0, BigInteger.ZERO);
-        cache.put(1, BigInteger.ONE);
-        return f(n, cache);
+        threads.clear();
+        try {
+            Map<Integer, BigInteger> cache = new ConcurrentHashMap<>();
+            cache.put(0, BigInteger.ZERO);
+            cache.put(1, BigInteger.ONE);
+            return f(n, cache);
+        } finally {
+            System.out.println("Number of threads worked: " + threads.size());
+        }
     }
 
     private final BigInteger RESERVED = BigInteger.valueOf(-1000);
@@ -63,15 +69,37 @@ public class Fibonacci {
         } else if (result == RESERVED) {
             // we must wait
             try {
-                synchronized (RESERVED) {
-                    while((result = cache.get(n)) == RESERVED) {
-                        RESERVED.wait();
-                    }
-                }
+                ReservedBlocker blocker = new ReservedBlocker(n, cache);
+                ForkJoinPool.managedBlock(blocker);
+                result = blocker.result;
             } catch (InterruptedException e) {
                 throw new CancellationException("interrupted");
             }
         }
         return result;
+    }
+
+    private class ReservedBlocker implements ForkJoinPool.ManagedBlocker {
+        private BigInteger result;
+        private final int n;
+        private final  Map<Integer, BigInteger> cache;
+
+        public ReservedBlocker(int n, Map<Integer, BigInteger> cache) {
+            this.n = n;
+            this.cache = cache;
+        }
+
+        public boolean isReleasable() {
+            return (result = cache.get(n)) != RESERVED;
+        }
+
+        public boolean block() throws InterruptedException {
+            synchronized (RESERVED) {
+                while(!(isReleasable())) {
+                    RESERVED.wait();
+                }
+            }
+            return true;
+        }
     }
 }
